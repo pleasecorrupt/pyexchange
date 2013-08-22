@@ -71,6 +71,9 @@ class Exchange2010CalendarService(BaseExchangeCalendarService):
   def new_event(self, **properties):
     return Exchange2010CalendarEvent(service=self.service, **properties)
 
+  def get_calendar_schedule(self, id=None, **kwargs):
+    return Exchange2010CalendarEvent(service=self.service, id=id, **kwargs)
+
 
 class Exchange2010CalendarEvent(BaseExchangeCalendarEvent):
 
@@ -89,6 +92,24 @@ class Exchange2010CalendarEvent(BaseExchangeCalendarEvent):
 
   def as_json(self):
     raise NotImplementedError
+
+  def get_schedules(self):
+    """
+    Gets schedules from Exchange ::
+
+      event = service.calendar().get_calendar_schedule(
+        start=datetime(year=2013, month=8, day=16, hour=0, minute=0, second=0), 
+        end=datetime(year=2013, month=8, day=17, hour=0, minute=0, second=0), 
+        attendees=u"nmei@linkedin.com")
+      event.get_schedules()
+
+    """
+    self.validate()
+    body = soap_request.get_calendar_schedule(self)
+    response_xml = self.service.send(body)
+    schedule_dict = self._parse_schedule_details(response_xml)
+
+    return schedule_dict
 
   def create(self):
     """
@@ -214,6 +235,37 @@ class Exchange2010CalendarEvent(BaseExchangeCalendarEvent):
     result[u'_resources'] = self._build_resource_dictionary([ExchangeEventResponse(**resource) for resource in resource_properties])
 
     return result
+
+  def _parse_schedule_details(self, response):
+
+    property_map = {
+      u'id'           : { u'xpath' : u't:CalendarEventDetails/t:ID'}, 
+      u'subject'      : { u'xpath' : u't:CalendarEventDetails/t:Subject'}, 
+      u'location'     : { u'xpath' : u't:CalendarEventDetails/t:Location'}, 
+      u'meeting'      : { u'xpath' : u't:CalendarEventDetails/t:IsMeeting'}, 
+      u'recurring'    : { u'xpath' : u't:CalendarEventDetails/t:IsRecurring'}, 
+      u'exception'    : { u'xpath' : u't:CalendarEventDetails/t:IsException'}, 
+      u'reminderset'  : { u'xpath' : u't:CalendarEventDetails/t:IsReminderSet'}, 
+      u'private'      : { u'xpath' : u't:CalendarEventDetails/t:IsPrivate'}, 
+      u'start'        : { u'xpath' : u't:StartTime'}, 
+      u'end'          : { u'xpath' : u't:EndTime'}, 
+      u'busy_type'    : { u'xpath' : u't:BusyType'}, 
+    }
+
+    schedules = response.xpath(u'//m:GetUserAvailabilityResponse/m:FreeBusyResponseArray/m:FreeBusyResponse/m:FreeBusyView/t:CalendarEventArray', namespaces=soap_request.NAMESPACES)
+
+    emails = [attendee.email for attendee in self.required_attendees]
+
+    parsed_schedules = {}
+
+    for schedule in schedules:
+      event_list = []
+      events = schedule.xpath(u't:CalendarEvent', namespaces=soap_request.NAMESPACES)
+      for event in events:
+        event_list.append(self.service._xpath_to_dict(element=event, property_map = property_map, namespace_map=soap_request.NAMESPACES))
+      parsed_schedules[emails.pop(0)] = event_list
+
+    return parsed_schedules
 
   def _parse_event_properties(self, response):
 

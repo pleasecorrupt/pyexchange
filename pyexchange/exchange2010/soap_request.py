@@ -95,6 +95,121 @@ def get_item(exchange_id, format=u"Default"):
   return root
 
 
+def get_calendar_schedule(event, format=u"Detailed", interval=30):
+  """
+    Requests calendar information of specified users between
+    start and end time based on specified intervals.
+
+    Defaults to showing you the most detail. Max 100 results.
+
+    http://msdn.microsoft.com/en-us/library/aa564001(v=exchg.140).aspx
+
+    <GetUserAvailabilityRequest xmlns="http://schemas.microsoft.com/exchange/services/2006/messages"
+                xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types">
+      <t:TimeZone xmlns="http://schemas.microsoft.com/exchange/services/2006/types">
+        <Bias>480</Bias>
+        <StandardTime>
+          <Bias>0</Bias>
+          <Time>02:00:00</Time>
+          <DayOrder>5</DayOrder>
+          <Month>10</Month>
+          <DayOfWeek>Sunday</DayOfWeek>
+        </StandardTime>
+        <DaylightTime>
+          <Bias>-60</Bias>
+          <Time>02:00:00</Time>
+          <DayOrder>1</DayOrder>
+          <Month>4</Month>
+          <DayOfWeek>Sunday</DayOfWeek>
+        </DaylightTime>
+      </t:TimeZone>
+      <MailboxDataArray>
+        <t:MailboxData>
+          <t:Email>
+            <t:Address>user1@example.com</t:Address>
+          </t:Email>
+          <t:AttendeeType>Required</t:AttendeeType>
+          <t:ExcludeConflicts>false</t:ExcludeConflicts>
+        </t:MailboxData>
+        <t:MailboxData>
+          <t:Email>
+            <t:Address>user2@example.com</t:Address>
+          </t:Email>
+          <t:AttendeeType>Required</t:AttendeeType>
+          <t:ExcludeConflicts>false</t:ExcludeConflicts>
+        </t:MailboxData>
+      </MailboxDataArray>
+      <t:FreeBusyViewOptions>
+        <t:TimeWindow>
+          <t:StartTime>2006-10-16T00:00:00</t:StartTime>
+          <t:EndTime>2006-10-16T23:59:59</t:EndTime>
+        </t:TimeWindow>
+        <t:MergedFreeBusyIntervalInMinutes>60</t:MergedFreeBusyIntervalInMinutes>
+        <t:RequestedView>DetailedMerged</t:RequestedView>
+      </t:FreeBusyViewOptions>
+    </GetUserAvailabilityRequest>
+  """
+  start = convert_datetime_to_utc(event.start)
+  end = convert_datetime_to_utc(event.end)
+
+  root = M.GetUserAvailabilityRequest(
+    T.TimeZone(
+      T.Bias("0"),
+      T.StandardTime(
+        T.Bias("0"),
+        T.Time("02:00:00"),
+        T.DayOrder("1"),
+        T.Month("11"),
+        T.DayOfWeek("Sunday")
+      ),
+      T.DaylightTime(
+        T.Bias("0"),
+        T.Time("02:00:00"),
+        T.DayOrder("2"),
+        T.Month("3"),
+        T.DayOfWeek("Sunday")
+      ),
+    ),
+    M.MailboxDataArray,
+    T.FreeBusyViewOptions(
+     T.TimeWindow(
+        T.StartTime(start.strftime(EXCHANGE_DATE_FORMAT)),
+        T.EndTime(end.strftime(EXCHANGE_DATE_FORMAT))
+      ),
+      T.MergedFreeBusyIntervalInMinutes("30"),
+      T.RequestedView(format)
+    )
+  )
+
+
+  calendar_node = root.xpath(u'/m:GetUserAvailabilityRequest/m:MailboxDataArray', namespaces=NAMESPACES)[0]
+
+  for attendee in event.required_attendees:
+    calendar_node.append(mailboxdata_node(attendee=attendee))
+
+  return root
+
+def mailboxdata_node(attendee):
+  """
+  Helper function to generate a person/conference room node from an email address
+
+  <t:MailboxData>
+    <t:Email>
+      <t:Address>{{ target_calendar }}</t:Address>
+    </t:Email>
+    <t:AttendeeType>Required</t:AttendeeType>
+    <t:ExcludeConflicts>false</t:ExcludeConflicts>
+  </t:MailboxData>
+  """
+  return T.MailboxData(
+    T.Email(
+      T.Address(attendee.email)
+    ),
+    T.AttendeeType("Required"),
+    T.ExcludeConflicts("false")
+  )
+
+
 def new_event(event):
   """
   Requests a new event be created in the store.

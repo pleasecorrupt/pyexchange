@@ -33,7 +33,7 @@ class ExchangeServiceSOAP(object):
     return self._parse(response, encoding=encoding)
 
   def _parse(self, response, encoding="utf-8"):
-
+    print response
     try:
       tree = etree.XML(response.encode(encoding))
     except (etree.XMLSyntaxError, TypeError) as err:
