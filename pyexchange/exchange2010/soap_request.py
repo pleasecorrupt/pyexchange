@@ -266,10 +266,13 @@ def new_event(event):
   start = convert_datetime_to_utc(event.start)
   end = convert_datetime_to_utc(event.end)
 
+  if event.delegate_for == "":
+    folder_node = T.DistinguishedFolderId(Id="calendar")
+  else:
+    folder_node = T.DistinguishedFolderId(T.Mailbox(T.EmailAddress(event.delegate_for)), Id="calendar")
+
   root = M.CreateItem(
-    M.SavedItemFolderId(
-      T.DistinguishedFolderId(Id="calendar")
-    ),
+    M.SavedItemFolderId(folder_node),
     M.Items(
       T.CalendarItem(
         T.Subject(event.subject),
